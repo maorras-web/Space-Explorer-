@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <!-- הגדרת ה-Viewport למניעת זום במובייל -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>מגלה החלל (Mobile & Settings)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- שכבת הכוכבים המנצנצים -->
+    <div class="stars-container">
+        <div class="stars"></div>
+        <div class="stars2"></div>
+        <div class="stars3"></div>
+    </div>
+
+    <!-- מסך המשחק הראשי (Mobile Optimized) -->
+    <div id="game-container">
+        
+        <!-- כותרת ראשית ומד זמן -->
+        <header>
+            <h1>מגלה החלל</h1>
+            <p>זמן הישרדות: <span id="survival-time">0</span> שניות</p>
+        </header>
+
+        <!-- אזור החלל המרכזי (שדה המשחק) -->
+        <main class="space-viewport">
+            <div class="spaceship" id="player-ship">
+                <div class="ship-body"></div>
+                <div class="ship-window"></div>
+                <div class="thruster-fire"></div>
+            </div>
+            
+            <div class="radar-scan">
+                <span>ממתין ליעד הבא...</span>
+            </div>
+        </main>
+
+        <!-- תפריט פעולות תחתון -->
+        <footer class="control-panel">
+            <!-- עדכון: הכפתור עכשיו פותח הגדרות -->
+            <button class="game-btn action-settings" onclick="toggleSettings()"><span id="settings-icon">⚙️</span> הגדרות</button>
+            <button class="game-btn action-save" onclick="saveHighScore()">💾 שיא</button>
+            <button class="game-btn action-start" onclick="startGame()">🚀 התחל</button>
+        </footer>
+
+    </div>
+
+    <!-- חלון מודלי להגדרות (נסתר כברירת מחדל) -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeSettings()">&times;</span>
+            <h2>⚙️ הגדרות משחק</h2>
+            
+            <div class="settings-options">
+                <!-- NEW: אפשרות לבחירת צבע הרקע -->
+                <div class="setting-item">
+                    <label for="bg-color-picker">צבע חלל:</label>
+                    <input type="color" id="bg-color-picker" value="#050510">
+                </div>
+                
+                <!-- NEW: כפתור לפרסומת לחיים נוספים (הכנה) -->
+                <div class="setting-item">
+                    <button class="game-btn reward-ad-btn" onclick="rewardAdForLife()">📺 צפה לחיים נוספים</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
