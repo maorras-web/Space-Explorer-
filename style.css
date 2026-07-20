@@ -31,6 +31,19 @@ body {
     overflow: hidden;
 }
 
+/* אפקט רעד למסך בפיצוצים (Screen Shake) */
+.shake {
+    animation: shakeAnim 0.15s ease-in-out;
+}
+
+@keyframes shakeAnim {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-4px, 3px); }
+    50% { transform: translate(4px, -3px); }
+    75% { transform: translate(-3px, -2px); }
+    100% { transform: translate(0, 0); }
+}
+
 /* --- רקע כוכבים נע --- */
 .stars-backdrop {
     position: absolute;
@@ -78,64 +91,57 @@ header {
     z-index: 5;
 }
 
-/* --- חללית ומגן --- */
+/* --- חלליות לבחירה --- */
 .spaceship {
     position: absolute;
     bottom: 30px;
-    width: 40px;
-    height: 55px;
+    width: 42px;
+    height: 58px;
     transform: translateX(-50%);
     z-index: 10;
 }
 
-.shield-aura {
-    position: absolute;
-    top: -10px; left: -10px;
-    width: 60px; height: 75px;
-    border: 3px solid #00d2ff;
-    border-radius: 50%;
-    box-shadow: 0 0 15px #00d2ff, inset 0 0 15px #00d2ff;
-    display: none;
-    animation: shieldPulse 1s infinite alternate;
-}
+.ship-body { width: 100%; height: 100%; border-radius: 50% 50% 20% 20%; }
 
-.shield-aura.active { display: block; }
+/* סוג 1: סייר בסיסי */
+.type-ship1 .ship-body { background: #e0e0e0; box-shadow: 0 0 12px #00d2ff; }
+.type-ship1 .ship-window { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; background: #00d2ff; border-radius: 50%; }
 
-@keyframes shieldPulse {
-    0% { opacity: 0.6; transform: scale(0.95); }
-    100% { opacity: 1; transform: scale(1.05); }
-}
+/* סוג 2: פנטום מהיר */
+.type-ship2 .ship-body { background: linear-gradient(135deg, #ff0055, #ffcc00); box-shadow: 0 0 15px #ff0055; border-radius: 20% 20% 40% 40%; }
+.type-ship2 .ship-window { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); width: 10px; height: 18px; background: #fff; border-radius: 4px; }
 
-.ship-body {
-    width: 100%; height: 100%;
-    background: #e0e0e0;
-    border-radius: 50% 50% 20% 20%;
-    box-shadow: 0 0 12px #00d2ff;
-}
-
-.ship-window {
-    position: absolute;
-    top: 20%; left: 50%;
-    transform: translateX(-50%);
-    width: 12px; height: 12px;
-    background: #00d2ff;
-    border-radius: 50%;
-}
+/* סוג 3: טיטאן כבד */
+.type-ship3 .ship-body { background: linear-gradient(135deg, #00ffcc, #0055ff); box-shadow: 0 0 18px #00ffcc; border-radius: 40% 40% 10% 10%; }
+.type-ship3 .ship-window { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); width: 16px; height: 10px; background: #ffcc00; border-radius: 3px; }
 
 .thruster-fire {
     position: absolute;
     bottom: -12px; left: 50%;
     transform: translateX(-50%);
-    width: 10px; height: 16px;
+    width: 12px; height: 18px;
     background: linear-gradient(to bottom, #ff9900, #ff0000);
     border-radius: 0 0 50% 50%;
     animation: pulse 0.1s infinite alternate;
+    box-shadow: 0 0 10px #ff9900;
 }
 
 @keyframes pulse {
     0% { transform: translateX(-50%) scaleY(1); }
     100% { transform: translateX(-50%) scaleY(1.4); }
 }
+
+.shield-aura {
+    position: absolute;
+    top: -10px; left: -10px;
+    width: 62px; height: 78px;
+    border: 3px solid #00d2ff;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #00d2ff, inset 0 0 15px #00d2ff;
+    display: none;
+    animation: shieldPulse 1s infinite alternate;
+}
+.shield-aura.active { display: block; }
 
 /* --- חללית אויב --- */
 .enemy-ship {
@@ -147,13 +153,13 @@ header {
     z-index: 8;
 }
 
-/* --- לייזרים --- */
+/* --- לייזרים עם VFX זוהר --- */
 .laser {
     position: absolute;
-    width: 4px; height: 16px;
+    width: 5px; height: 18px;
     background: var(--laser-color);
-    box-shadow: 0 0 10px var(--laser-color);
-    border-radius: 2px;
+    box-shadow: 0 0 12px var(--laser-color), 0 0 20px var(--laser-color);
+    border-radius: 3px;
     z-index: 8;
 }
 
@@ -162,47 +168,30 @@ header {
     position: absolute;
     background: #6c7a89;
     border-radius: 40% 60% 50% 50%;
-    box-shadow: inset -4px -4px 6px rgba(0,0,0,0.6), 0 0 6px rgba(255,255,255,0.2);
+    box-shadow: inset -4px -4px 6px rgba(0,0,0,0.6), 0 0 8px rgba(255,255,255,0.2);
     z-index: 7;
 }
 
-/* --- חפצי הבונוס (Power-ups) --- */
+/* --- בונוסים --- */
 .power-up {
     position: absolute;
-    width: 28px; height: 28px;
+    width: 30px; height: 30px;
     border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 16px;
-    z-index: 9;
+    display: flex; justify-content: center; align-items: center;
+    font-size: 16px; z-index: 9;
     animation: floatPower 1.5s infinite alternate;
 }
+.power-shield { background: rgba(0, 210, 255, 0.3); border: 2px solid #00d2ff; box-shadow: 0 0 12px #00d2ff; }
+.power-double { background: rgba(255, 204, 0, 0.3); border: 2px solid #ffcc00; box-shadow: 0 0 12px #ffcc00; }
 
-.power-shield {
-    background: rgba(0, 210, 255, 0.3);
-    border: 2px solid #00d2ff;
-    box-shadow: 0 0 12px #00d2ff;
-}
-
-.power-double {
-    background: rgba(255, 204, 0, 0.3);
-    border: 2px solid #ffcc00;
-    box-shadow: 0 0 12px #ffcc00;
-}
-
-@keyframes floatPower {
-    from { transform: translateY(0); }
-    to { transform: translateY(-6px); }
-}
-
-/* --- חלקיקי פיצוץ --- */
+/* --- חלקיקי פיצוץ VFX --- */
 .particle {
     position: absolute;
-    width: 5px; height: 5px;
+    width: 6px; height: 6px;
     border-radius: 50%;
     pointer-events: none;
     z-index: 9;
+    box-shadow: 0 0 8px currentColor;
     animation: pop 0.5s ease-out forwards;
 }
 
@@ -211,44 +200,71 @@ header {
     100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0); }
 }
 
+/* --- מסכי תפריט וחלליות --- */
 .overlay {
     position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.85);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 20;
+    background: rgba(5, 5, 16, 0.92);
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    z-index: 20; padding: 20px; text-align: center;
 }
-
 .overlay.hidden { display: none; }
 
+.ship-selector {
+    display: flex; gap: 10px; margin: 20px 0;
+}
+
+.ship-card {
+    background: rgba(255,255,255,0.05);
+    border: 2px solid #334;
+    border-radius: 10px;
+    padding: 10px 8px;
+    width: 95px;
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer; transition: all 0.2s;
+}
+
+.ship-card.selected {
+    border-color: #00ffcc;
+    box-shadow: 0 0 12px rgba(0,255,204,0.4);
+    background: rgba(0,255,204,0.1);
+}
+
+.ship-card.locked {
+    opacity: 0.5;
+    border-color: #555;
+    cursor: not-allowed;
+}
+
+.ship-preview {
+    width: 30px; height: 40px; margin-bottom: 8px;
+    border-radius: 50% 50% 20% 20%;
+}
+.p-ship1 { background: #e0e0e0; box-shadow: 0 0 8px #00d2ff; }
+.p-ship2 { background: linear-gradient(135deg, #ff0055, #ffcc00); box-shadow: 0 0 8px #ff0055; }
+.p-ship3 { background: linear-gradient(135deg, #00ffcc, #0055ff); box-shadow: 0 0 8px #00ffcc; }
+
+.ship-card span { font-size: 0.8em; font-weight: bold; }
+.ship-card small { font-size: 0.65em; color: #aaa; margin-top: 4px; }
+
+/* --- פקדים --- */
 .control-panel {
-    display: flex;
-    justify-content: space-around;
-    padding: 12px;
-    background: rgba(15, 15, 25, 0.95);
-    z-index: 10;
-    border-top: 1px solid #223;
+    display: flex; justify-content: space-around;
+    padding: 12px; background: rgba(15, 15, 25, 0.95);
+    z-index: 10; border-top: 1px solid #223;
 }
 
 .game-btn {
     background: linear-gradient(135deg, #2575fc, #6a11cb);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    font-size: 15px;
-    font-weight: bold;
-    border-radius: 8px;
-    cursor: pointer;
+    color: white; border: none; padding: 10px 20px;
+    font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer;
 }
 
 .modal {
     display: none; position: fixed; z-index: 100;
     left: 0; top: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.8);
-    justify-content: center; align-items: center;
+    background: rgba(0,0,0,0.8); justify-content: center; align-items: center;
 }
 .modal.show { display: flex; }
 .modal-content {
