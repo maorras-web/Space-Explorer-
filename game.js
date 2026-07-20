@@ -8,8 +8,72 @@ const highScoreElement = document.getElementById('high-score');
 const finalScoreElement = document.getElementById('final-score');
 const startScreen = document.getElementById('start-screen');
 const gameOverOverlay = document.getElementById('game-over-overlay');
-const settingsModal = document.getElementById('settings-modal');
-const bgColorPicker = document.getElementById('bg-color-picker');
+const shipSelectorContainer = document.getElementById('ship-selector-container');
+
+// --- מנגנון ריבוי שפות (Internationalization) ---
+const translations = {
+    'he': {
+        'score': 'ניקוד',
+        'shield': 'מגן',
+        'shieldNone': 'אין',
+        'shieldActive': 'פעיל',
+        'highScore': 'שיא',
+        'gameTitle': '🚀 Space Explorer',
+        'shipSelectionLead': 'בחר חללית מתקדמת והתחל לשחק:',
+        'startBtn': '🚀 התחל משחק',
+        'gameOverTitle': '💥 החללית הושמדה!',
+        'yourScore': 'הניקוד שלך',
+        'mainMenuBtn': '🔄 לתפריט הראשי',
+        'unlocked': 'פתוח',
+        'lockedAt': 'משריין ב-{{{points}}} נק\'',
+        'points': 'נק\'',
+        'ship1Name': 'סייר אלפא',
+        'ship2Name': 'פנטום X',
+        'ship3Name': 'טיטאן ניאון'
+    },
+    'en': {
+        'score': 'Score',
+        'shield': 'Shield',
+        'shieldNone': 'None',
+        'shieldActive': 'Active',
+        'highScore': 'High Score',
+        'gameTitle': '🚀 Space Explorer',
+        'shipSelectionLead': 'Select an advanced ship to play:',
+        'startBtn': '🚀 Start Game',
+        'gameOverTitle': '💥 Ship Destroyed!',
+        'yourScore': 'Your Score',
+        'mainMenuBtn': '🔄 Main Menu',
+        'unlocked': 'Unlocked',
+        'lockedAt': 'Unlocks at {{{points}}} pts',
+        'points': 'pts',
+        'ship1Name': 'Alpha Scout',
+        'ship2Name': 'Phantom X',
+        'ship3Name': 'Neon Titan'
+    }
+};
+
+// קביעת אנגלית כשפת הברירת מחדל הבלעדית (ללא בדיקת דפדפן)
+let currentLang = 'en'; 
+
+// פונקציית תרגום
+function t(key, data = {}) {
+    let translation = translations[currentLang][key] || key;
+    for (const dataKey in data) {
+        translation = translation.replace(`{{{${dataKey}}}}`, data[dataKey]);
+    }
+    return translation;
+}
+
+// יישום השפה על כל האלמנטים המודגשים בקובץ ה-HTML
+function applyTranslations() {
+    // מציאת כל האלמנטים עם אטריבוט data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.innerText = t(key);
+    });
+
+    updateShieldUI(); // עדכון טקסט המגן ברירת המחדל
+}
 
 let score = 0;
 let highScore = localStorage.getItem('space_high_score') || 0;
@@ -41,40 +105,88 @@ function playSound(type) {
     gainNode.connect(audioCtx.destination);
     
     let duration = 0.1;
-    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
     
     if (type === 'laser') {
         oscillator.type = 'triangle';
-        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.08);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        duration = 0.1;
+        oscillator.frequency.setValueAtTime(850, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.08);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.09);
+        duration = 0.09;
     } else if (type === 'explosion') {
         oscillator.type = 'sawtooth';
-        oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.15);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-        duration = 0.2;
+        oscillator.frequency.setValueAtTime(140, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(15, audioCtx.currentTime + 0.15);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+        duration = 0.18;
     } else if (type === 'powerup') {
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(400, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);
+        oscillator.frequency.setValueAtTime(450, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(1100, audioCtx.currentTime + 0.12);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
         duration = 0.15;
     } else if (type === 'gameover') {
         oscillator.type = 'square';
-        oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-        duration = 0.4;
+        oscillator.frequency.setValueAtTime(280, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.35);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.38);
+        duration = 0.38;
     }
     
     oscillator.start();
     oscillator.stop(audioCtx.currentTime + duration);
 }
 
+// טעינת שיא
 highScoreElement.innerText = highScore;
-updateShipCards();
+
+// --- בניית כרטיסי חלליות דינמית עם שפה ---
+const shipData = [
+    { id: 'ship1', nameKey: 'ship1Name', req: 0, previewClass: 'p-ship1' },
+    { id: 'ship2', nameKey: 'ship2Name', req: 200, previewClass: 'p-ship2' },
+    { id: 'ship3', nameKey: 'ship3Name', req: 500, previewClass: 'p-ship3' }
+];
+
+function buildShipCards() {
+    shipSelectorContainer.innerHTML = ''; // ניקוי
+
+    shipData.forEach(ship => {
+        const isLocked = highScore < ship.req;
+        const card = document.createElement('div');
+        card.id = `card-${ship.id}`;
+        card.className = `ship-card ${isLocked ? 'locked' : ''} ${ship.id === selectedShipType ? 'selected' : ''}`;
+        
+        // רק אם לא נעול אפשר לבחור
+        if (!isLocked) {
+            card.onclick = () => selectShip(ship.id);
+        }
+
+        const preview = document.createElement('div');
+        preview.className = `ship-preview ${ship.previewClass}`;
+        
+        const name = document.createElement('span');
+        name.innerText = t(ship.nameKey);
+        
+        const description = document.createElement('small');
+        if (isLocked) {
+            description.innerText = t('lockedAt', { points: ship.req });
+        } else {
+            description.innerText = t('unlocked');
+        }
+
+        card.appendChild(preview);
+        card.appendChild(name);
+        card.appendChild(description);
+        
+        shipSelectorContainer.appendChild(card);
+    });
+}
+
+
+// יישום שפה ברירת מחדל ובניית כרטיסים ראשונית
+applyTranslations();
+buildShipCards();
+
 
 // --- שליטה במגע ---
 viewport.addEventListener('touchmove', (e) => {
@@ -88,45 +200,26 @@ viewport.addEventListener('touchmove', (e) => {
     if (shipX > 95) shipX = 95;
     
     playerShip.style.left = shipX + '%';
-});
+}, { passive: false });
 
 function showStartScreen() {
     isGameOver = true;
     startScreen.classList.remove('hidden');
     gameOverOverlay.classList.add('hidden');
-    updateShipCards();
-}
-
-function updateShipCards() {
-    // עדכון נעילה/פתיחה לפי השיא
-    const card2 = document.getElementById('card-ship2');
-    const card3 = document.getElementById('card-ship3');
-
-    if (highScore >= 200) {
-        card2.classList.remove('locked');
-        document.getElementById('req-ship2').innerText = 'פתוח!';
-    } else {
-        card2.classList.add('locked');
-        document.getElementById('req-ship2').innerText = 'משריין ב-200 נק\'';
-    }
-    if (highScore >= 500) {
-        card3.classList.remove('locked');
-        document.getElementById('req-ship3').innerText = 'פתוח!';
-    } else {
-        card3.classList.add('locked');
-        document.getElementById('req-ship3').innerText = 'משריין ב-500 נק\'';
-    }
+    
+    // עדכון כרטיסים
+    buildShipCards();
 }
 
 function selectShip(type) {
-    if (type === 'ship2' && highScore < 200) return;
-    if (type === 'ship3' && highScore < 500) return;
+    const ship = shipData.find(s => s.id === type);
+    if (highScore < ship.req) return;
 
     selectedShipType = type;
+    
     document.querySelectorAll('.ship-card').forEach(c => c.classList.remove('selected'));
     document.getElementById(`card-${type}`).classList.add('selected');
 
-    // החלפת עיצוב החללית
     playerShip.className = `spaceship type-${type}`;
 }
 
@@ -137,7 +230,6 @@ function startGame() {
     score = 0;
     doubleShotTime = 0;
 
-    // חללית טיטאן כבד (ship3) מתחילה עם מגן מובנה
     hasShield = (selectedShipType === 'ship3');
     updateShieldUI();
 
@@ -145,7 +237,6 @@ function startGame() {
     startScreen.classList.add('hidden');
     gameOverOverlay.classList.add('hidden');
     
-    // ניקוי אלמנטים ישנים
     lasers.forEach(l => l.el.remove());
     asteroids.forEach(a => a.el.remove());
     enemies.forEach(e => e.el.remove());
@@ -160,8 +251,7 @@ function startGame() {
     clearInterval(powerUpTimer); clearInterval(shootTimer);
     cancelAnimationFrame(gameLoopId);
 
-    // קצב ירייה לפי סוג החללית (פנטום יורה מהר יותר)
-    const fireInterval = (selectedShipType === 'ship2') ? 150 : 220;
+    const fireInterval = (selectedShipType === 'ship2') ? 140 : 210;
 
     shootTimer = setInterval(shootLaser, fireInterval);
     spawnTimer = setInterval(createAsteroid, 600);
@@ -174,11 +264,11 @@ function startGame() {
 function updateShieldUI() {
     if (hasShield) {
         shieldAura.classList.add('active');
-        shieldValElement.innerText = "פעיל";
+        shieldValElement.innerText = t('shieldActive');
         shieldValElement.style.color = "#00d2ff";
     } else {
         shieldAura.classList.remove('active');
-        shieldValElement.innerText = "אין";
+        shieldValElement.innerText = t('shieldNone');
         shieldValElement.style.color = "white";
     }
 }
@@ -194,8 +284,8 @@ function shootLaser() {
 
     if (doubleShotTime > 0) {
         doubleShotTime -= 200;
-        createLaserElement(shipRect.left + 5 - vpRect.left, topY);
-        createLaserElement(shipRect.right - 10 - vpRect.left, topY);
+        createLaserElement(shipRect.left + 4 - vpRect.left, topY);
+        createLaserElement(shipRect.right - 9 - vpRect.left, topY);
     } else {
         const centerX = shipRect.left + shipRect.width / 2 - vpRect.left;
         createLaserElement(centerX - 2.5, topY);
@@ -225,7 +315,7 @@ function createAsteroid() {
     asteroidEl.style.top = -size + 'px';
 
     viewport.appendChild(asteroidEl);
-    const speed = Math.random() * 2 + 2 + (score / 120); // האטה קלה של הגברת המהירות
+    const speed = Math.random() * 2 + 2 + (score / 120);
 
     asteroids.push({ el: asteroidEl, x: x, y: -size, size: size, speed: speed });
 }
@@ -235,12 +325,12 @@ function createEnemy() {
     const enemyEl = document.createElement('div');
     enemyEl.classList.add('enemy-ship');
 
-    const x = Math.random() * (viewport.offsetWidth - 40);
+    const x = Math.random() * (viewport.offsetWidth - 42);
     enemyEl.style.left = x + 'px';
-    enemyEl.style.top = '-40px';
+    enemyEl.style.top = '-42px';
 
     viewport.appendChild(enemyEl);
-    enemies.push({ el: enemyEl, x: x, y: -40, speed: 2.5, dirX: Math.random() > 0.5 ? 1.5 : -1.5 });
+    enemies.push({ el: enemyEl, x: x, y: -42, speed: 2.5, dirX: Math.random() > 0.5 ? 1.5 : -1.5 });
 }
 
 function createPowerUp() {
@@ -257,12 +347,12 @@ function createPowerUp() {
         powerEl.innerText = '⚡';
     }
 
-    const x = Math.random() * (viewport.offsetWidth - 30);
+    const x = Math.random() * (viewport.offsetWidth - 32);
     powerEl.style.left = x + 'px';
-    powerEl.style.top = '-30px';
+    powerEl.style.top = '-32px';
 
     viewport.appendChild(powerEl);
-    powerUps.push({ el: powerEl, x: x, y: -30, type: type });
+    powerUps.push({ el: powerEl, x: x, y: -32, type: type });
 }
 
 function gameLoop() {
@@ -271,7 +361,7 @@ function gameLoop() {
     // 1. לייזרים
     for (let i = lasers.length - 1; i >= 0; i--) {
         let l = lasers[i];
-        l.y -= 13;
+        l.y -= 14;
         l.el.style.top = l.y + 'px';
 
         if (l.y < -20) {
@@ -321,17 +411,17 @@ function gameLoop() {
         e.y += e.speed;
         e.x += e.dirX;
 
-        if (e.x <= 0 || e.x >= viewport.offsetWidth - 40) e.dirX *= -1;
+        if (e.x <= 0 || e.x >= viewport.offsetWidth - 42) e.dirX *= -1;
 
         e.el.style.top = e.y + 'px';
         e.el.style.left = e.x + 'px';
 
         for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
             let l = lasers[lIndex];
-            if (l.x > e.x && l.x < e.x + 40 && l.y > e.y && l.y < e.y + 40) {
+            if (l.x > e.x && l.x < e.x + 42 && l.y > e.y && l.y < e.y + 42) {
                 playSound('explosion');
                 triggerScreenShake();
-                createExplosion(e.x + 20, e.y + 20, ['#ff0055', '#00d2ff', '#ffffff']);
+                createExplosion(e.x + 21, e.y + 21, ['#ff0055', '#00d2ff', '#ffffff']);
                 e.el.remove();
                 enemies.splice(eIndex, 1);
                 l.el.remove();
@@ -342,7 +432,7 @@ function gameLoop() {
             }
         }
 
-        if (checkCollision(playerShip, e.x, e.y, 40, 40)) {
+        if (checkCollision(playerShip, e.x, e.y, 42, 42)) {
             e.el.remove();
             enemies.splice(eIndex, 1);
             handlePlayerHit();
@@ -361,13 +451,13 @@ function gameLoop() {
         p.y += 2;
         p.el.style.top = p.y + 'px';
 
-        if (checkCollision(playerShip, p.x, p.y, 30, 30)) {
+        if (checkCollision(playerShip, p.x, p.y, 32, 32)) {
             playSound('powerup');
             if (p.type === 'shield') {
                 hasShield = true;
                 updateShieldUI();
             } else if (p.type === 'double') {
-                doubleShotTime = 6000;
+                doubleShotTime = 15000; // 15 שניות
             }
             p.el.remove();
             powerUps.splice(pIndex, 1);
@@ -448,10 +538,3 @@ function gameOver() {
     finalScoreElement.innerText = score;
     gameOverOverlay.classList.remove('hidden');
 }
-
-function toggleSettings() { settingsModal.classList.toggle('show'); }
-function closeSettings() { settingsModal.classList.remove('show'); }
-
-bgColorPicker.addEventListener('input', (e) => {
-    container.style.backgroundColor = e.target.value;
-});
