@@ -1,291 +1,358 @@
-// --- הגדרות בסיסיות של המשחק (Mobile & settings) ---
-const spaceViewport = document.querySelector('.space-viewport');
+const viewport = document.getElementById('viewport');
 const playerShip = document.getElementById('player-ship');
-const survivalTimeElement = document.getElementById('survival-time');
-const modal = document.getElementById('settings-modal'); // מעודכן ל-settings
-const bgColorPicker = document.getElementById('bg-color-picker'); // NEW Color Picker
-const gameContainer = document.getElementById('game-container'); // אזור הרקע
+const shieldAura = document.getElementById('shield-aura');
+const shieldValElement = document.getElementById('shield-val');
+const scoreElement = document.getElementById('score');
+const highScoreElement = document.getElementById('high-score');
+const finalScoreElement = document.getElementById('final-score');
+const gameOverOverlay = document.getElementById('game-over-overlay');
+const settingsModal = document.getElementById('settings-modal');
+const bgColorPicker = document.getElementById('bg-color-picker');
 
-let asteroids = []; // מערך לשמירת האסטרואידים הפעילים
-let gameInterval; // אינטרוואל ללולאת המשחק
-let createAsteroidInterval; // אינטרוואל לייצור אסטרואידים
-let timeInterval; // אינטרוואל למדידת זמן
-let isGameOver = false; // דגל למצב המשחק
-let startTime; // זמן תחילת המשחק
-let survivalTime = 0; // זמן ההישרדות בשניות
+let score = 0;
+let highScore = localStorage.getItem('space_high_score') || 0;
+let isGameOver = true;
+let shipX = 50;
 
-// --- NEW לוגיקת צבע הרקע (Persistent) ---
+let hasShield = false;
+let doubleShotTime = 0; // זמן שנשאר לירייה כפולה
 
-// פונקציה לטעינת הצבע השמור והחלתה
-function loadBgColor() {
-    // קבלת הצבע השמור מהאחסון המקומי
-    const savedColor = localStorage.getItem('spaceExplorerBgColor');
+let lasers = [];
+let asteroids = [];
+let enemies = [];
+let powerUps = [];
+
+let gameLoopId;
+let spawnTimer;
+let enemyTimer;
+let powerUpTimer;
+let shootTimer;
+
+highScoreElement.innerText = highScore;
+
+// --- שליטה במגע ---
+viewport.addEventListener('touchmove', (e) => {
+    if (isGameOver) return;
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    shipX = (touchX / rect.width) * 100;
     
-    if (savedColor) {
-        // החלת הצבע על הרקע
-        document.body.style.backgroundColor = savedColor;
-        // עדכון פקד הצבע שיראה את הצבע השמור
-        bgColorPicker.value = savedColor;
+    if (shipX < 5) shipX = 5;
+    if (shipX > 95) shipX = 95;
+    
+    playerShip.style.left = shipX + '%';
+});
+
+function startGame() {
+    isGameOver = false;
+    score = 0;
+    hasShield = false;
+    doubleShotTime = 0;
+    updateShieldUI();
+
+    scoreElement.innerText = score;
+    gameOverOverlay.classList.add('hidden');
+    
+    // ניקוי אלמנטים ישנים
+    lasers.forEach(l => l.el.remove());
+    asteroids.forEach(a => a.el.remove());
+    enemies.forEach(e => e.el.remove());
+    powerUps.forEach(p => p.el.remove());
+
+    lasers = [];
+    asteroids = [];
+    enemies = [];
+    powerUps = [];
+
+    shipX = 50;
+    playerShip.style.left = '50%';
+
+    clearInterval(spawnTimer);
+    clearInterval(enemyTimer);
+    clearInterval(powerUpTimer);
+    clearInterval(shootTimer);
+    cancelAnimationFrame(gameLoopId);
+
+    // תזמוני ייצור אלמנטים
+    shootTimer = setInterval(shootLaser, 220);
+    spawnTimer = setInterval(createAsteroid, 600);
+    enemyTimer = setInterval(createEnemy, 4000);
+    powerUpTimer = setInterval(createPowerUp, 7000);
+
+    gameLoop();
+}
+
+function updateShieldUI() {
+    if (hasShield) {
+        shieldAura.classList.add('active');
+        shieldValElement.innerText = "פעיל";
+        shieldValElement.style.color = "#00d2ff";
+    } else {
+        shieldAura.classList.remove('active');
+        shieldValElement.innerText = "אין";
+        shieldValElement.style.color = "white";
     }
 }
 
-// הקשבה לשינוי בפקד הצבע
-bgColorPicker.addEventListener('input', () => {
-    const selectedColor = bgColorPicker.value;
-    // עדכון הרקע מיידית
-    document.body.style.backgroundColor = selectedColor;
-    // שמירת הבחירה ב-Local Storage
-    localStorage.setItem('spaceExplorerBgColor', selectedColor);
-});
-
-// הפעלת פונקציית הטעינה
-loadBgColor();
-
-// --- לוגיקת תנועת המגע (Drag and Move) ---
-
-let isDragging = false; // דגל האם השחקן גורר את האצבע
-let startTouchX = 0; // מיקום המגע ההתחלתי
-let shipPositionPercent = 50; // מיקום החללית התחלתי (אחוזים)
-
-// הגדרת המיקום ההתחלתי גם בקוד
-playerShip.style.left = shipPositionPercent + '%';
-
-// התחלת המגע
-spaceViewport.addEventListener('touchstart', (event) => {
-    if (isGameOver) return; // מניעת תנועה אם המשחק נגמר
-    isDragging = true;
-    startTouchX = event.touches[0].clientX; // שמירת מיקום הנגיעה הראשונה
-});
-
-// תנועת האצבע על המסך
-spaceViewport.addEventListener('touchmove', (event) => {
-    if (!isDragging || isGameOver) return; // עצירה אם לא גוררים או המשחק נגמר
-    
-    event.preventDefault(); // מניעת גלילת המסך
-
-    const currentTouchX = event.touches[0].clientX; // מיקום האצבע הנוכחי
-    const viewportWidth = spaceViewport.offsetWidth; // רוחב אזור המשחק
-
-    // חישוב המרחק שהאצבע עברה (בפיקסלים)
-    const moveXPixels = currentTouchX - startTouchX;
-    
-    // המרת המרחק לפיקסלים לאחוזים מתוך רוחב המסך
-    const moveXPercent = (moveXPixels / viewportWidth) * 100;
-    
-    // עדכון המיקום החדש
-    let newPositionPercent = shipPositionPercent + moveXPercent;
-
-    // --- בדיקת גבולות (מניעת יציאה מהמסך) ---
-    // מגבלות: בין 10% (שמאל) ל-90% (ימין) מרוחב המסך.
-    const shipWidthPercent = (playerShip.offsetWidth / viewportWidth) * 100;
-    const padding = 5; // רווח ביטחון מהגבול
-    const minPosition = shipWidthPercent / 2 + padding;
-    const maxPosition = 100 - shipWidthPercent / 2 - padding;
-    
-    if (newPositionPercent < minPosition) newPositionPercent = minPosition;
-    if (newPositionPercent > maxPosition) newPositionPercent = maxPosition;
-
-    // עדכון המיקום הוויזואלי (בצורה חלקה ב-CSS)
-    playerShip.style.left = newPositionPercent + '%';
-
-    // שמירת המיקום הנוכחי כהתחלתי לתנועה הבאה
-    shipPositionPercent = newPositionPercent;
-    startTouchX = currentTouchX;
-});
-
-// סיום המגע
-spaceViewport.addEventListener('touchend', () => {
-    isDragging = false;
-});
-
-// --- לוגיקת האסטרואידים (בגודל ומהירות מותאמים) ---
-
-function createAsteroid() {
-    const asteroid = document.createElement('div');
-    asteroid.classList.add('asteroid');
-    
-    // מיקום אקראי
-    const randomX = Math.random() * 80 + 10;
-    asteroid.style.left = randomX + '%';
-    
-    // גודל אקראי
-    const randomSize = Math.random() * 15 + 20;
-    asteroid.style.width = randomSize + 'px';
-    asteroid.style.height = randomSize + 'px';
-
-    spaceViewport.appendChild(asteroid);
-    
-    asteroids.push({
-        element: asteroid,
-        y: -40, // מיקום מעל המסך
-        speed: Math.random() * 2 + 1.5
-    });
-}
-
-function moveAsteroids() {
+function shootLaser() {
     if (isGameOver) return;
 
     const shipRect = playerShip.getBoundingClientRect();
+    const vpRect = viewport.getBoundingClientRect();
+    const topY = shipRect.top - vpRect.top;
 
-    for (let i = asteroids.length - 1; i >= 0; i--) {
-        let asteroid = asteroids[i];
-        asteroid.y += asteroid.speed; // הזזה למטה
-        asteroid.element.style.top = asteroid.y + 'px';
-
-        const asteroidRect = asteroid.element.getBoundingClientRect();
-
-        // בדיקת התנגשות
-        if (
-            shipRect.left < asteroidRect.right &&
-            shipRect.right > asteroidRect.left &&
-            shipRect.top < asteroidRect.bottom &&
-            shipRect.bottom > asteroidRect.top
-        ) {
-            // התנגשות!
-            gameOver();
-            return;
-        }
-
-        if (asteroid.y > spaceViewport.offsetHeight) {
-            asteroid.element.remove();
-            asteroids.splice(i, 1);
-        }
+    if (doubleShotTime > 0) {
+        // ירייה כפולה
+        doubleShotTime -= 220;
+        createLaserElement(shipRect.left + 5 - vpRect.left, topY);
+        createLaserElement(shipRect.right - 9 - vpRect.left, topY);
+    } else {
+        // ירייה רגילה
+        const centerX = shipRect.left + shipRect.width / 2 - vpRect.left;
+        createLaserElement(centerX - 2, topY);
     }
 }
 
-// --- פונקציות סיום והתחלת משחק ---
-
-function gameOver() {
-    isGameOver = true;
-    
-    // עצירת האינטרוואלים
-    clearInterval(gameInterval);
-    clearInterval(createAsteroidInterval);
-    clearInterval(timeInterval); 
-    
-    // --- NEW VFX: הפיצוץ ---
-    createExplosion(playerShip);
-    
-    // עדכון טקסט המכ"ם לאזעקה
-    document.querySelector('.radar-scan span').innerText = "אזעקת התנגשות!";
-    document.querySelector('.radar-scan').style.borderColor = "#ff4757"; // אדום
-    document.querySelector('.radar-scan').style.color = "#ff4757";
-
-    // שינוי כפתור ההתחלה ל"🔄"
-    document.querySelector('.action-start').innerHTML = "🔄 שוב";
+function createLaserElement(x, y) {
+    const laserEl = document.createElement('div');
+    laserEl.classList.add('laser');
+    laserEl.style.left = x + 'px';
+    laserEl.style.top = y + 'px';
+    viewport.appendChild(laserEl);
+    lasers.push({ el: laserEl, x: x, y: y });
 }
 
-function startGame() {
-    // איפוס מצב המשחק
-    isGameOver = false;
-    asteroids.forEach(a => a.element.remove()); // ניקוי אסטרואידים
-    asteroids = [];
-    shipPositionPercent = 50; // איפוס מיקום החללית
-    playerShip.style.left = '50%';
-    survivalTime = 0; // איפוס הזמן
-    survivalTimeElement.innerText = "0";
+function createAsteroid() {
+    if (isGameOver) return;
+    const asteroidEl = document.createElement('div');
+    asteroidEl.classList.add('asteroid');
 
-    // שינוי כפתור ההתחלה
-    document.querySelector('.action-start').innerHTML = "🚀 התחל";
+    const size = Math.random() * 25 + 25;
+    const x = Math.random() * (viewport.offsetWidth - size);
 
-    // הפעלה
-    startTime = Date.now();
-    timeInterval = setInterval(updateTime, 1000); 
-    createAsteroidInterval = setInterval(createAsteroid, 1000); // ייצור אסטרואידים
-    gameInterval = setInterval(gameLoop, 20); // לולאת תנועה
-    
-    // עדכון טקסט המכ"ם
-    document.querySelector('.radar-scan span').innerText = "זהירות! מטר!";
-    document.querySelector('.radar-scan').style.borderColor = "#00ff00"; // ירוק
-    document.querySelector('.radar-scan').style.color = "#00ff00";
+    asteroidEl.style.width = size + 'px';
+    asteroidEl.style.height = size + 'px';
+    asteroidEl.style.left = x + 'px';
+    asteroidEl.style.top = -size + 'px';
+
+    viewport.appendChild(asteroidEl);
+    const speed = Math.random() * 2 + 2 + (score / 60);
+
+    asteroids.push({ el: asteroidEl, x: x, y: -size, size: size, speed: speed });
 }
 
-function updateTime() {
-    survivalTime = Math.floor((Date.now() - startTime) / 1000);
-    survivalTimeElement.innerText = survivalTime;
+function createEnemy() {
+    if (isGameOver) return;
+    const enemyEl = document.createElement('div');
+    enemyEl.classList.add('enemy-ship');
+
+    const x = Math.random() * (viewport.offsetWidth - 40);
+    enemyEl.style.left = x + 'px';
+    enemyEl.style.top = '-40px';
+
+    viewport.appendChild(enemyEl);
+    enemies.push({ el: enemyEl, x: x, y: -40, speed: 2.5, dirX: Math.random() > 0.5 ? 1.5 : -1.5 });
+}
+
+function createPowerUp() {
+    if (isGameOver) return;
+    const powerEl = document.createElement('div');
+    powerEl.classList.add('power-up');
+
+    const type = Math.random() > 0.5 ? 'shield' : 'double';
+    if (type === 'shield') {
+        powerEl.classList.add('power-shield');
+        powerEl.innerText = '🛡️';
+    } else {
+        powerEl.classList.add('power-double');
+        powerEl.innerText = '⚡';
+    }
+
+    const x = Math.random() * (viewport.offsetWidth - 30);
+    powerEl.style.left = x + 'px';
+    powerEl.style.top = '-30px';
+
+    viewport.appendChild(powerEl);
+    powerUps.push({ el: powerEl, x: x, y: -30, type: type });
 }
 
 function gameLoop() {
-    moveAsteroids();
-}
+    if (isGameOver) return;
 
-// --- NEW VFX: לוגיקת הפיצוץ ---
+    // 1. לייזרים
+    for (let i = lasers.length - 1; i >= 0; i--) {
+        let l = lasers[i];
+        l.y -= 12;
+        l.el.style.top = l.y + 'px';
 
-function createExplosion(targetElement) {
-    const targetRect = targetElement.getBoundingClientRect();
-    const viewportRect = spaceViewport.getBoundingClientRect();
-    
-    const x = targetRect.left + targetRect.width / 2 - viewportRect.left;
-    const y = targetRect.top + targetRect.height / 2 - viewportRect.top;
-
-    // יצירת חלקיקים
-    for (let i = 0; i < 15; i++) {
-        const particle = document.createElement('div');
-        particle.classList.add('explosion-particle');
-        particle.style.left = x + 'px';
-        particle.style.top = y + 'px';
-        
-        // כיוון פיזור
-        const angle = Math.random() * Math.PI * 2;
-        const force = Math.random() * 60 + 15;
-        const dx = Math.cos(angle) * force;
-        const dy = Math.sin(angle) * force;
-        particle.style.setProperty('--dx', dx + 'px');
-        particle.style.setProperty('--dy', dy + 'px');
-        
-        // צבעי פיצוץ
-        const colors = ['#ff3300', '#ff9900', '#ffee00'];
-        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-
-        spaceViewport.appendChild(particle);
-        
-        // מחיקה
-        setTimeout(() => particle.remove(), 1000);
+        if (l.y < -20) {
+            l.el.remove();
+            lasers.splice(i, 1);
+        }
     }
-}
 
-// --- לוגיקת לוח הבקרה (מותאם להגדרות) ---
+    // 2. אסטרואידים
+    for (let aIndex = asteroids.length - 1; aIndex >= 0; aIndex--) {
+        let a = asteroids[aIndex];
+        a.y += a.speed;
+        a.el.style.top = a.y + 'px';
 
-// כפתור "הגדרות"
-function toggleSettings() {
-    modal.classList.add('show');
-}
+        // בדיקת פגיעה בלייזר
+        for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
+            let l = lasers[lIndex];
+            if (l.x > a.x && l.x < a.x + a.size && l.y > a.y && l.y < a.y + a.size) {
+                createExplosion(a.x + a.size / 2, a.y + a.size / 2, ['#ff0', '#ff5500']);
+                a.el.remove();
+                asteroids.splice(aIndex, 1);
+                l.el.remove();
+                lasers.splice(lIndex, 1);
+                score += 10;
+                scoreElement.innerText = score;
+                break;
+            }
+        }
 
-function closeSettings() {
-    modal.classList.remove('show');
-}
+        // התנגשות בשחקן
+        if (checkCollision(playerShip, a.x, a.y, a.size, a.size)) {
+            a.el.remove();
+            asteroids.splice(aIndex, 1);
+            handlePlayerHit();
+            break;
+        }
 
-// סגירת Modal בלחיצה מחוץ לחלון
-window.onclick = function(event) {
-    if (event.target == modal) {
-        modal.classList.remove('show');
+        if (a.y > viewport.offsetHeight) {
+            a.el.remove();
+            asteroids.splice(aIndex, 1);
+        }
     }
+
+    // 3. חלליות אויב
+    for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+        let e = enemies[eIndex];
+        e.y += e.speed;
+        e.x += e.dirX;
+
+        // זגזג בצדדים
+        if (e.x <= 0 || e.x >= viewport.offsetWidth - 40) e.dirX *= -1;
+
+        e.el.style.top = e.y + 'px';
+        e.el.style.left = e.x + 'px';
+
+        // פגיעת לייזר באויב
+        for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
+            let l = lasers[lIndex];
+            if (l.x > e.x && l.x < e.x + 40 && l.y > e.y && l.y < e.y + 40) {
+                createExplosion(e.x + 20, e.y + 20, ['#ff0055', '#00d2ff']);
+                e.el.remove();
+                enemies.splice(eIndex, 1);
+                l.el.remove();
+                lasers.splice(lIndex, 1);
+                score += 30; // בונוס ניקוד גבוה לאויב
+                scoreElement.innerText = score;
+                break;
+            }
+        }
+
+        if (checkCollision(playerShip, e.x, e.y, 40, 40)) {
+            e.el.remove();
+            enemies.splice(eIndex, 1);
+            handlePlayerHit();
+            break;
+        }
+
+        if (e.y > viewport.offsetHeight) {
+            e.el.remove();
+            enemies.splice(eIndex, 1);
+        }
+    }
+
+    // 4. בונוסים (Power-ups)
+    for (let pIndex = powerUps.length - 1; pIndex >= 0; pIndex--) {
+        let p = powerUps[pIndex];
+        p.y += 2;
+        p.el.style.top = p.y + 'px';
+
+        if (checkCollision(playerShip, p.x, p.y, 28, 28)) {
+            if (p.type === 'shield') {
+                hasShield = true;
+                updateShieldUI();
+            } else if (p.type === 'double') {
+                doubleShotTime = 6000; // 6 שניות ירייה כפולה
+            }
+            p.el.remove();
+            powerUps.splice(pIndex, 1);
+        } else if (p.y > viewport.offsetHeight) {
+            p.el.remove();
+            powerUps.splice(pIndex, 1);
+        }
+    }
+
+    gameLoopId = requestAnimationFrame(gameLoop);
 }
 
-// כפתור "שמור התקדמות" (עובד כרגיל)
-function saveHighScore() {
-    const currentHighScore = localStorage.getItem('spaceExplorerHighScore');
-    
-    if (!currentHighScore || survivalTime > parseInt(currentHighScore)) {
-        localStorage.setItem('spaceExplorerHighScore', survivalTime);
-        alert('שיא חדש נשמר: ' + survivalTime + ' שניות!');
+function checkCollision(ship, objX, objY, objW, objH) {
+    const sRect = ship.getBoundingClientRect();
+    const vRect = viewport.getBoundingClientRect();
+    const sX = sRect.left - vRect.left;
+    const sY = sRect.top - vRect.top;
+
+    return (
+        sX < objX + objW &&
+        sX + sRect.width > objX &&
+        sY < objY + objH &&
+        sY + sRect.height > objY
+    );
+}
+
+function handlePlayerHit() {
+    if (hasShield) {
+        hasShield = false;
+        updateShieldUI();
+        createExplosion(shipX * viewport.offsetWidth / 100, viewport.offsetHeight - 60, ['#00d2ff']);
     } else {
-        alert('השיא הקודם שלך הוא ' + currentHighScore + ' שניות. נסה שוב!');
+        gameOver();
     }
 }
 
-// NEW FUNCTION: כפתור לפרסומת לחיים נוספים (הכנה)
-function rewardAdForLife() {
-    alert('צפית בפרסומת! קבל חיים נוספים וחזור להתחלה (בגרסה הבאה נוסיף את הפרסומת האמיתית).');
-    closeSettings();
-    startGame();
+function createExplosion(x, y, colors) {
+    for (let i = 0; i < 14; i++) {
+        const p = document.createElement('div');
+        p.classList.add('particle');
+        p.style.left = x + 'px';
+        p.style.top = y + 'px';
+        p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 45 + 10;
+        p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+
+        viewport.appendChild(p);
+        setTimeout(() => p.remove(), 500);
+    }
 }
 
-// הפעלת המשחק בפעם הראשונה
-window.onload = function() {
-    const highScore = localStorage.getItem('spaceExplorerHighScore');
-    if (highScore) {
-        document.querySelector('.radar-scan span').innerText = "שיא קודם: " + highScore + " שניות.";
+function gameOver() {
+    isGameOver = true;
+    clearInterval(spawnTimer);
+    clearInterval(enemyTimer);
+    clearInterval(powerUpTimer);
+    clearInterval(shootTimer);
+
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('space_high_score', highScore);
+        highScoreElement.innerText = highScore;
     }
-    startGame();
-};
+
+    finalScoreElement.innerText = score;
+    gameOverOverlay.classList.remove('hidden');
+}
+
+function toggleSettings() { settingsModal.classList.toggle('show'); }
+function closeSettings() { settingsModal.classList.remove('show'); }
+
+bgColorPicker.addEventListener('input', (e) => {
+    document.getElementById('game-container').style.backgroundColor = e.target.value;
+});
