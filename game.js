@@ -10,6 +10,8 @@ const startScreen = document.getElementById('start-screen');
 const pauseModal = document.getElementById('pause-modal');
 const gameOverOverlay = document.getElementById('game-over-overlay');
 const shipSelectorContainer = document.getElementById('ship-selector-container');
+const adModal = document.getElementById('ad-modal');
+const reviveBtn = document.getElementById('revive-btn');
 
 let score = 0;
 let highScore = localStorage.getItem('space_high_score') || 0;
@@ -17,11 +19,12 @@ let isGameOver = true;
 let isPaused = false;
 let shipX = 50;
 
-let playerHP = 3; // 3 חיים לשחקן!
+let playerHP = 3;
 let selectedShipType = 'ship1';
-let currentWeaponType = 'single'; // בחירת נשק
+let currentWeaponType = 'single';
 let hasShield = false;
 let weaponPowerEndTime = 0;
+let hasRevivedThisGame = false; // הגבלה להחייאה פעם אחת במשחק
 
 let lasers = [];
 let enemyLasers = [];
@@ -32,13 +35,14 @@ let powerUps = [];
 let gameLoopId;
 let spawnTimer, enemyTimer, powerUpTimer, shootTimer, enemyShootTimer;
 
-// Audio
+// Audio System
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(gain); 
+    gain.connect(audioCtx.destination);
     gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
 
     if (type === 'laser') {
@@ -50,7 +54,8 @@ function playSound(type) {
         osc.frequency.setValueAtTime(150, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.15);
     }
-    osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+    osc.start(); 
+    osc.stop(audioCtx.currentTime + 0.12);
 }
 
 highScoreElement.innerText = highScore;
@@ -85,7 +90,6 @@ function selectWeapon(type) {
     document.getElementById(`w-${type}`).classList.add('selected');
 }
 
-// עצירה / המשך משחק (Pause)
 function togglePause() {
     if (isGameOver) return;
     isPaused = !isPaused;
@@ -97,6 +101,7 @@ function togglePause() {
     }
 }
 
+// Touch & Drag Movement
 viewport.addEventListener('touchmove', (e) => {
     if (isGameOver || isPaused) return;
     e.preventDefault();
@@ -127,8 +132,10 @@ function startGame() {
     isGameOver = false;
     isPaused = false;
     score = 0;
-    playerHP = 3; // איפוס ל-3 חיים
+    playerHP = 3; 
     hasShield = (selectedShipType === 'ship3');
+    hasRevivedThisGame = false;
+    reviveBtn.style.display = 'block';
 
     updateShieldUI();
     updateHPUI();
@@ -139,7 +146,8 @@ function startGame() {
     pauseModal.classList.add('hidden');
 
     clearAllEntities();
-    shipX = 50; playerShip.style.left = '50%';
+    shipX = 50; 
+    playerShip.style.left = '50%';
 
     clearIntervals();
     shootTimer = setInterval(shootLaser, 180);
@@ -161,8 +169,10 @@ function clearAllEntities() {
 }
 
 function clearIntervals() {
-    clearInterval(spawnTimer); clearInterval(enemyTimer);
-    clearInterval(powerUpTimer); clearInterval(shootTimer);
+    clearInterval(spawnTimer); 
+    clearInterval(enemyTimer);
+    clearInterval(powerUpTimer); 
+    clearInterval(shootTimer);
     clearInterval(enemyShootTimer);
     cancelAnimationFrame(gameLoopId);
 }
@@ -223,8 +233,10 @@ function createAsteroid() {
     asteroidEl.classList.add('asteroid');
     const size = Math.random() * 25 + 25;
     const x = Math.random() * (viewport.offsetWidth - size);
-    asteroidEl.style.width = size + 'px'; asteroidEl.style.height = size + 'px';
-    asteroidEl.style.left = x + 'px'; asteroidEl.style.top = -size + 'px';
+    asteroidEl.style.width = size + 'px'; 
+    asteroidEl.style.height = size + 'px';
+    asteroidEl.style.left = x + 'px'; 
+    asteroidEl.style.top = -size + 'px';
     viewport.appendChild(asteroidEl);
     asteroids.push({ el: asteroidEl, x: x, y: -size, size: size, speed: Math.random() * 2 + 2 });
 }
@@ -234,7 +246,8 @@ function createEnemy() {
     const enemyEl = document.createElement('div');
     enemyEl.classList.add('enemy-ship');
     const x = Math.random() * (viewport.offsetWidth - 42);
-    enemyEl.style.left = x + 'px'; enemyEl.style.top = '-42px';
+    enemyEl.style.left = x + 'px'; 
+    enemyEl.style.top = '-42px';
     viewport.appendChild(enemyEl);
     enemies.push({ el: enemyEl, x: x, y: -42, speed: 2, dirX: Math.random() > 0.5 ? 1 : -1 });
 }
@@ -246,7 +259,8 @@ function createPowerUp() {
     const type = Math.random() > 0.5 ? 'shield' : 'double';
     powerEl.innerText = (type === 'shield') ? '🛡️' : '⚡';
     const x = Math.random() * (viewport.offsetWidth - 32);
-    powerEl.style.left = x + 'px'; powerEl.style.top = '-32px';
+    powerEl.style.left = x + 'px'; 
+    powerEl.style.top = '-32px';
     viewport.appendChild(powerEl);
     powerUps.push({ el: powerEl, x: x, y: -32, type: type });
 }
@@ -256,8 +270,10 @@ function gameLoop() {
 
     for (let i = lasers.length - 1; i >= 0; i--) {
         let l = lasers[i];
-        l.y -= 12; l.x += l.vx;
-        l.el.style.top = l.y + 'px'; l.el.style.left = l.x + 'px';
+        l.y -= 12; 
+        l.x += l.vx;
+        l.el.style.top = l.y + 'px'; 
+        l.el.style.left = l.x + 'px';
         if (l.y < -20) { l.el.remove(); lasers.splice(i, 1); }
     }
 
@@ -267,15 +283,18 @@ function gameLoop() {
         el.el.style.top = el.y + 'px';
 
         if (checkCollision(playerShip, el.x, el.y, 5, 16)) {
-            el.el.remove(); enemyLasers.splice(i, 1);
-            handlePlayerHit(); break;
+            el.el.remove(); 
+            enemyLasers.splice(i, 1);
+            handlePlayerHit(); 
+            break;
         }
         if (el.y > viewport.offsetHeight) { el.el.remove(); enemyLasers.splice(i, 1); }
     }
 
     for (let aIndex = asteroids.length - 1; aIndex >= 0; aIndex--) {
         let a = asteroids[aIndex];
-        a.y += a.speed; a.el.style.top = a.y + 'px';
+        a.y += a.speed; 
+        a.el.style.top = a.y + 'px';
 
         for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
             let l = lasers[lIndex];
@@ -289,17 +308,21 @@ function gameLoop() {
         }
 
         if (checkCollision(playerShip, a.x, a.y, a.size, a.size)) {
-            a.el.remove(); asteroids.splice(aIndex, 1);
-            handlePlayerHit(); break;
+            a.el.remove(); 
+            asteroids.splice(aIndex, 1);
+            handlePlayerHit(); 
+            break;
         }
         if (a.y > viewport.offsetHeight) { a.el.remove(); asteroids.splice(aIndex, 1); }
     }
 
     for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
         let e = enemies[eIndex];
-        e.y += e.speed; e.x += e.dirX;
+        e.y += e.speed; 
+        e.x += e.dirX;
         if (e.x <= 0 || e.x >= viewport.offsetWidth - 42) e.dirX *= -1;
-        e.el.style.top = e.y + 'px'; e.el.style.left = e.x + 'px';
+        e.el.style.top = e.y + 'px'; 
+        e.el.style.left = e.x + 'px';
 
         for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
             let l = lasers[lIndex];
@@ -313,15 +336,18 @@ function gameLoop() {
         }
 
         if (checkCollision(playerShip, e.x, e.y, 42, 42)) {
-            e.el.remove(); enemies.splice(eIndex, 1);
-            handlePlayerHit(); break;
+            e.el.remove(); 
+            enemies.splice(eIndex, 1);
+            handlePlayerHit(); 
+            break;
         }
         if (e.y > viewport.offsetHeight) { e.el.remove(); enemies.splice(eIndex, 1); }
     }
 
     for (let pIndex = powerUps.length - 1; pIndex >= 0; pIndex--) {
         let p = powerUps[pIndex];
-        p.y += 2; p.el.style.top = p.y + 'px';
+        p.y += 2; 
+        p.el.style.top = p.y + 'px';
         if (checkCollision(playerShip, p.x, p.y, 32, 32)) {
             if (p.type === 'shield') { hasShield = true; updateShieldUI(); }
             else { weaponPowerEndTime = Date.now() + 10000; }
@@ -340,7 +366,6 @@ function checkCollision(ship, objX, objY, objW, objH) {
     return (sX < objX + objW && sX + sRect.width > objX && sY < objY + objH && sY + sRect.height > objY);
 }
 
-// ניהול פגיעה בשחקן (מגן או הורדת חיים)
 function handlePlayerHit() {
     playSound('explosion');
     if (hasShield) {
@@ -353,6 +378,40 @@ function handlePlayerHit() {
             gameOver();
         }
     }
+}
+
+// Watch Ad to Revive Mechanism
+function watchAdToRevive() {
+    gameOverOverlay.classList.add('hidden');
+    adModal.classList.remove('hidden');
+    let timeLeft = 3;
+    document.getElementById('ad-timer').innerText = timeLeft;
+
+    const adInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('ad-timer').innerText = timeLeft;
+        if (timeLeft <= 0) {
+            clearInterval(adInterval);
+            adModal.classList.add('hidden');
+            
+            // Revive Player
+            playerHP = 1;
+            hasRevivedThisGame = true;
+            reviveBtn.style.display = 'none'; // אפשר להחיות רק פעם אחת בסיבוב
+            updateHPUI();
+            
+            isGameOver = false;
+            clearAllEntities();
+            
+            shootTimer = setInterval(shootLaser, 180);
+            spawnTimer = setInterval(createAsteroid, 900);
+            enemyTimer = setInterval(createEnemy, 3200);
+            enemyShootTimer = setInterval(enemiesShoot, 2000);
+            powerUpTimer = setInterval(createPowerUp, 8000);
+            
+            gameLoop();
+        }
+    }, 1000);
 }
 
 function gameOver() {
