@@ -1,540 +1,237 @@
-const container = document.getElementById('game-container');
-const viewport = document.getElementById('viewport');
-const playerShip = document.getElementById('player-ship');
-const shieldAura = document.getElementById('shield-aura');
-const shieldValElement = document.getElementById('shield-val');
-const scoreElement = document.getElementById('score');
-const highScoreElement = document.getElementById('high-score');
-const finalScoreElement = document.getElementById('final-score');
-const startScreen = document.getElementById('start-screen');
-const gameOverOverlay = document.getElementById('game-over-overlay');
-const shipSelectorContainer = document.getElementById('ship-selector-container');
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-// --- מנגנון ריבוי שפות (Internationalization) ---
-const translations = {
-    'he': {
-        'score': 'ניקוד',
-        'shield': 'מגן',
-        'shieldNone': 'אין',
-        'shieldActive': 'פעיל',
-        'highScore': 'שיא',
-        'gameTitle': '🚀 Space Explorer',
-        'shipSelectionLead': 'בחר חללית מתקדמת והתחל לשחק:',
-        'startBtn': '🚀 התחל משחק',
-        'gameOverTitle': '💥 החללית הושמדה!',
-        'yourScore': 'הניקוד שלך',
-        'mainMenuBtn': '🔄 לתפריט הראשי',
-        'unlocked': 'פתוח',
-        'lockedAt': 'משריין ב-{{{points}}} נק\'',
-        'points': 'נק\'',
-        'ship1Name': 'סייר אלפא',
-        'ship2Name': 'פנטום X',
-        'ship3Name': 'טיטאן ניאון'
-    },
-    'en': {
-        'score': 'Score',
-        'shield': 'Shield',
-        'shieldNone': 'None',
-        'shieldActive': 'Active',
-        'highScore': 'High Score',
-        'gameTitle': '🚀 Space Explorer',
-        'shipSelectionLead': 'Select an advanced ship to play:',
-        'startBtn': '🚀 Start Game',
-        'gameOverTitle': '💥 Ship Destroyed!',
-        'yourScore': 'Your Score',
-        'mainMenuBtn': '🔄 Main Menu',
-        'unlocked': 'Unlocked',
-        'lockedAt': 'Unlocks at {{{points}}} pts',
-        'points': 'pts',
-        'ship1Name': 'Alpha Scout',
-        'ship2Name': 'Phantom X',
-        'ship3Name': 'Neon Titan'
-    }
+canvas.width = 800;
+canvas.height = 600;
+
+// ==========================================
+// 1. הגדרות משחק ומנגנונים
+// ==========================================
+let settings = {
+    vfxVolume: 0.8,
+    difficulty: "normal",
+    defaultShip: "blue",
+    sensitivity: 5
 };
 
-// קביעת אנגלית כשפת הברירת מחדל הבלעדית (ללא בדיקת דפדפן)
-let currentLang = 'en'; 
+const WEAPONS = {
+    PLASMA: { name: "פלאזמה", speed: 12, damage: 20, color: "#00f0ff" },
+    RED_LIGHTNING: { name: "חשמל אדום", speed: 18, damage: 35, color: "#ff0033" },
+    YELLOW_ORB: { name: "כדור אנרגיה", speed: 8, damage: 50, color: "#ffff00" }
+};
 
-// פונקציית תרגום
-function t(key, data = {}) {
-    let translation = translations[currentLang][key] || key;
-    for (const dataKey in data) {
-        translation = translation.replace(`{{{${dataKey}}}}`, data[dataKey]);
-    }
-    return translation;
-}
+let player = {
+    x: 380,
+    y: 500,
+    width: 40,
+    height: 40,
+    health: 100,
+    maxHealth: 100,
+    currentWeapon: WEAPONS.PLASMA,
+    backupSummoned: false
+};
 
-// יישום השפה על כל האלמנטים המודגשים בקובץ ה-HTML
-function applyTranslations() {
-    // מציאת כל האלמנטים עם אטריבוט data-i18n
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        el.innerText = t(key);
-    });
-
-    updateShieldUI(); // עדכון טקסט המגן ברירת המחדל
-}
-
-let score = 0;
-let highScore = localStorage.getItem('space_high_score') || 0;
-let isGameOver = true;
-let shipX = 50;
-
-let selectedShipType = 'ship1';
-let hasShield = false;
-let doubleShotTime = 0;
-
-let lasers = [];
+let bullets = [];
 let asteroids = [];
 let enemies = [];
-let powerUps = [];
+let backupShips = [];
+let boss = null;
+let postGameChallenge = false;
+let isGameRunning = false;
 
-let gameLoopId;
-let spawnTimer, enemyTimer, powerUpTimer, shootTimer;
+// שמע של פעימה אנרגטית לפיראטים
+const energyPulseAudio = new Audio(); // מקום להוספת סאונד פעימה
 
-// --- מנגנון אודיו פנימי (Web Audio API) ---
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-function playSound(type) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    let duration = 0.1;
-    gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
-    
-    if (type === 'laser') {
-        oscillator.type = 'triangle';
-        oscillator.frequency.setValueAtTime(850, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.08);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.09);
-        duration = 0.09;
-    } else if (type === 'explosion') {
-        oscillator.type = 'sawtooth';
-        oscillator.frequency.setValueAtTime(140, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(15, audioCtx.currentTime + 0.15);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
-        duration = 0.18;
-    } else if (type === 'powerup') {
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(450, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(1100, audioCtx.currentTime + 0.12);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-        duration = 0.15;
-    } else if (type === 'gameover') {
-        oscillator.type = 'square';
-        oscillator.frequency.setValueAtTime(280, audioCtx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.35);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.38);
-        duration = 0.38;
-    }
-    
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + duration);
-}
-
-// טעינת שיא
-highScoreElement.innerText = highScore;
-
-// --- בניית כרטיסי חלליות דינמית עם שפה ---
-const shipData = [
-    { id: 'ship1', nameKey: 'ship1Name', req: 0, previewClass: 'p-ship1' },
-    { id: 'ship2', nameKey: 'ship2Name', req: 200, previewClass: 'p-ship2' },
-    { id: 'ship3', nameKey: 'ship3Name', req: 500, previewClass: 'p-ship3' }
-];
-
-function buildShipCards() {
-    shipSelectorContainer.innerHTML = ''; // ניקוי
-
-    shipData.forEach(ship => {
-        const isLocked = highScore < ship.req;
-        const card = document.createElement('div');
-        card.id = `card-${ship.id}`;
-        card.className = `ship-card ${isLocked ? 'locked' : ''} ${ship.id === selectedShipType ? 'selected' : ''}`;
-        
-        // רק אם לא נעול אפשר לבחור
-        if (!isLocked) {
-            card.onclick = () => selectShip(ship.id);
-        }
-
-        const preview = document.createElement('div');
-        preview.className = `ship-preview ${ship.previewClass}`;
-        
-        const name = document.createElement('span');
-        name.innerText = t(ship.nameKey);
-        
-        const description = document.createElement('small');
-        if (isLocked) {
-            description.innerText = t('lockedAt', { points: ship.req });
-        } else {
-            description.innerText = t('unlocked');
-        }
-
-        card.appendChild(preview);
-        card.appendChild(name);
-        card.appendChild(description);
-        
-        shipSelectorContainer.appendChild(card);
-    });
-}
-
-
-// יישום שפה ברירת מחדל ובניית כרטיסים ראשונית
-applyTranslations();
-buildShipCards();
-
-
-// --- שליטה במגע ---
-viewport.addEventListener('touchmove', (e) => {
-    if (isGameOver) return;
-    e.preventDefault();
-    const rect = viewport.getBoundingClientRect();
-    const touchX = e.touches[0].clientX - rect.left;
-    shipX = (touchX / rect.width) * 100;
-    
-    if (shipX < 5) shipX = 5;
-    if (shipX > 95) shipX = 95;
-    
-    playerShip.style.left = shipX + '%';
-}, { passive: false });
-
-function showStartScreen() {
-    isGameOver = true;
-    startScreen.classList.remove('hidden');
-    gameOverOverlay.classList.add('hidden');
-    
-    // עדכון כרטיסים
-    buildShipCards();
-}
-
-function selectShip(type) {
-    const ship = shipData.find(s => s.id === type);
-    if (highScore < ship.req) return;
-
-    selectedShipType = type;
-    
-    document.querySelectorAll('.ship-card').forEach(c => c.classList.remove('selected'));
-    document.getElementById(`card-${type}`).classList.add('selected');
-
-    playerShip.className = `spaceship type-${type}`;
-}
-
+// ==========================================
+// 2. תחילת משחק והגדרות
+// ==========================================
 function startGame() {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    
-    isGameOver = false;
-    score = 0;
-    doubleShotTime = 0;
-
-    hasShield = (selectedShipType === 'ship3');
-    updateShieldUI();
-
-    scoreElement.innerText = score;
-    startScreen.classList.add('hidden');
-    gameOverOverlay.classList.add('hidden');
-    
-    lasers.forEach(l => l.el.remove());
-    asteroids.forEach(a => a.el.remove());
-    enemies.forEach(e => e.el.remove());
-    powerUps.forEach(p => p.el.remove());
-
-    lasers = []; asteroids = []; enemies = []; powerUps = [];
-
-    shipX = 50;
-    playerShip.style.left = '50%';
-
-    clearInterval(spawnTimer); clearInterval(enemyTimer);
-    clearInterval(powerUpTimer); clearInterval(shootTimer);
-    cancelAnimationFrame(gameLoopId);
-
-    const fireInterval = (selectedShipType === 'ship2') ? 140 : 210;
-
-    shootTimer = setInterval(shootLaser, fireInterval);
-    spawnTimer = setInterval(createAsteroid, 600);
-    enemyTimer = setInterval(createEnemy, 3800);
-    powerUpTimer = setInterval(createPowerUp, 7000);
-
+    document.getElementById("main-menu").classList.add("hidden");
+    isGameRunning = true;
+    resetGame();
     gameLoop();
 }
 
-function updateShieldUI() {
-    if (hasShield) {
-        shieldAura.classList.add('active');
-        shieldValElement.innerText = t('shieldActive');
-        shieldValElement.style.color = "#00d2ff";
+function toggleSettings() {
+    const menu = document.getElementById("settings-menu");
+    menu.classList.toggle("hidden");
+}
+
+function updateSettings() {
+    settings.vfxVolume = document.getElementById("vfx-volume").value / 100;
+    settings.difficulty = document.getElementById("difficulty").value;
+    settings.defaultShip = document.getElementById("default-ship").value;
+    settings.sensitivity = parseInt(document.getElementById("sensitivity").value);
+}
+
+function resetGame() {
+    player.health = 100;
+    player.x = 380;
+    player.y = 500;
+    player.backupSummoned = false;
+    bullets = [];
+    asteroids = [];
+    enemies = [];
+    backupShips = [];
+    boss = null;
+    postGameChallenge = false;
+}
+
+// ==========================================
+// 3. תנועה וירי
+// ==========================================
+window.addEventListener("mousemove", (e) => {
+    if (!isGameRunning) return;
+    const rect = canvas.getBoundingClientRect();
+    let targetX = e.clientX - rect.left - player.width / 2;
+    player.x += (targetX - player.x) * (settings.sensitivity / 10);
+});
+
+window.addEventListener("click", () => {
+    if (!isGameRunning) return;
+
+    // אתגר פוסט-בוס: ירי של כל הנשקים המשולבים בבת אחת!
+    if (postGameChallenge) {
+        bullets.push({ x: player.x + 20, y: player.y, type: "PLASMA", speed: 12 });
+        bullets.push({ x: player.x + 10, y: player.y, type: "RED_LIGHTNING", speed: 18 });
+        bullets.push({ x: player.x + 30, y: player.y, type: "YELLOW_ORB", speed: 8 });
     } else {
-        shieldAura.classList.remove('active');
-        shieldValElement.innerText = t('shieldNone');
-        shieldValElement.style.color = "white";
+        bullets.push({ x: player.x + 20, y: player.y, type: "PLASMA", speed: 12 });
+    }
+});
+
+// ==========================================
+// 4. ציור אלמנטים (Craters, Health Bar, Weapons)
+// ==========================================
+
+// ציור מד חיים משולש ירוק
+function drawTriangleHealthBar(x, y, width, height, current, max) {
+    const percent = Math.max(0, current / max);
+    ctx.save();
+    ctx.translate(x, y - 15);
+
+    // מסגרת משולש
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(width / 2, -height);
+    ctx.lineTo(width, 0);
+    ctx.closePath();
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+
+    // מילוי ירוק
+    if (percent > 0) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo((width / 2) * percent, -height * percent);
+        ctx.lineTo(width * percent, 0);
+        ctx.closePath();
+        ctx.fillStyle = "#00ff66";
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ציור אסטרואידים עם מכתשים (הפחתה ב-40%)
+function spawnAsteroid() {
+    if (Math.random() < 0.012) { // תדירות מופחתת ב-40%
+        asteroids.push({
+            x: Math.random() * (canvas.width - 40),
+            y: -40,
+            radius: 20 + Math.random() * 15,
+            speed: 2 + Math.random() * 2
+        });
     }
 }
 
-function shootLaser() {
-    if (isGameOver) return;
-    
-    playSound('laser');
-    
-    const shipRect = playerShip.getBoundingClientRect();
-    const vpRect = viewport.getBoundingClientRect();
-    const topY = shipRect.top - vpRect.top;
-
-    if (doubleShotTime > 0) {
-        doubleShotTime -= 200;
-        createLaserElement(shipRect.left + 4 - vpRect.left, topY);
-        createLaserElement(shipRect.right - 9 - vpRect.left, topY);
-    } else {
-        const centerX = shipRect.left + shipRect.width / 2 - vpRect.left;
-        createLaserElement(centerX - 2.5, topY);
-    }
-}
-
-function createLaserElement(x, y) {
-    const laserEl = document.createElement('div');
-    laserEl.classList.add('laser');
-    laserEl.style.left = x + 'px';
-    laserEl.style.top = y + 'px';
-    viewport.appendChild(laserEl);
-    lasers.push({ el: laserEl, x: x, y: y });
-}
-
-function createAsteroid() {
-    if (isGameOver) return;
-    const asteroidEl = document.createElement('div');
-    asteroidEl.classList.add('asteroid');
-
-    const size = Math.random() * 25 + 25;
-    const x = Math.random() * (viewport.offsetWidth - size);
-
-    asteroidEl.style.width = size + 'px';
-    asteroidEl.style.height = size + 'px';
-    asteroidEl.style.left = x + 'px';
-    asteroidEl.style.top = -size + 'px';
-
-    viewport.appendChild(asteroidEl);
-    const speed = Math.random() * 2 + 2 + (score / 120);
-
-    asteroids.push({ el: asteroidEl, x: x, y: -size, size: size, speed: speed });
-}
-
-function createEnemy() {
-    if (isGameOver) return;
-    const enemyEl = document.createElement('div');
-    enemyEl.classList.add('enemy-ship');
-
-    const x = Math.random() * (viewport.offsetWidth - 42);
-    enemyEl.style.left = x + 'px';
-    enemyEl.style.top = '-42px';
-
-    viewport.appendChild(enemyEl);
-    enemies.push({ el: enemyEl, x: x, y: -42, speed: 2.5, dirX: Math.random() > 0.5 ? 1.5 : -1.5 });
-}
-
-function createPowerUp() {
-    if (isGameOver) return;
-    const powerEl = document.createElement('div');
-    powerEl.classList.add('power-up');
-
-    const type = Math.random() > 0.5 ? 'shield' : 'double';
-    if (type === 'shield') {
-        powerEl.classList.add('power-shield');
-        powerEl.innerText = '🛡️';
-    } else {
-        powerEl.classList.add('power-double');
-        powerEl.innerText = '⚡';
-    }
-
-    const x = Math.random() * (viewport.offsetWidth - 32);
-    powerEl.style.left = x + 'px';
-    powerEl.style.top = '-32px';
-
-    viewport.appendChild(powerEl);
-    powerUps.push({ el: powerEl, x: x, y: -32, type: type });
-}
-
-function gameLoop() {
-    if (isGameOver) return;
-
-    // 1. לייזרים
-    for (let i = lasers.length - 1; i >= 0; i--) {
-        let l = lasers[i];
-        l.y -= 14;
-        l.el.style.top = l.y + 'px';
-
-        if (l.y < -20) {
-            l.el.remove();
-            lasers.splice(i, 1);
-        }
-    }
-
-    // 2. אסטרואידים
-    for (let aIndex = asteroids.length - 1; aIndex >= 0; aIndex--) {
-        let a = asteroids[aIndex];
-        a.y += a.speed;
-        a.el.style.top = a.y + 'px';
-
-        for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
-            let l = lasers[lIndex];
-            if (l.x > a.x && l.x < a.x + a.size && l.y > a.y && l.y < a.y + a.size) {
-                playSound('explosion');
-                triggerScreenShake();
-                createExplosion(a.x + a.size / 2, a.y + a.size / 2, ['#ff0', '#ff5500', '#00ffcc']);
-                a.el.remove();
-                asteroids.splice(aIndex, 1);
-                l.el.remove();
-                lasers.splice(lIndex, 1);
-                score += 10;
-                scoreElement.innerText = score;
-                break;
-            }
-        }
-
-        if (checkCollision(playerShip, a.x, a.y, a.size, a.size)) {
-            a.el.remove();
-            asteroids.splice(aIndex, 1);
-            handlePlayerHit();
-            break;
-        }
-
-        if (a.y > viewport.offsetHeight) {
-            a.el.remove();
-            asteroids.splice(aIndex, 1);
-        }
-    }
-
-    // 3. חלליות אויב
-    for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
-        let e = enemies[eIndex];
-        e.y += e.speed;
-        e.x += e.dirX;
-
-        if (e.x <= 0 || e.x >= viewport.offsetWidth - 42) e.dirX *= -1;
-
-        e.el.style.top = e.y + 'px';
-        e.el.style.left = e.x + 'px';
-
-        for (let lIndex = lasers.length - 1; lIndex >= 0; lIndex--) {
-            let l = lasers[lIndex];
-            if (l.x > e.x && l.x < e.x + 42 && l.y > e.y && l.y < e.y + 42) {
-                playSound('explosion');
-                triggerScreenShake();
-                createExplosion(e.x + 21, e.y + 21, ['#ff0055', '#00d2ff', '#ffffff']);
-                e.el.remove();
-                enemies.splice(eIndex, 1);
-                l.el.remove();
-                lasers.splice(lIndex, 1);
-                score += 30;
-                scoreElement.innerText = score;
-                break;
-            }
-        }
-
-        if (checkCollision(playerShip, e.x, e.y, 42, 42)) {
-            e.el.remove();
-            enemies.splice(eIndex, 1);
-            handlePlayerHit();
-            break;
-        }
-
-        if (e.y > viewport.offsetHeight) {
-            e.el.remove();
-            enemies.splice(eIndex, 1);
-        }
-    }
-
-    // 4. בונוסים
-    for (let pIndex = powerUps.length - 1; pIndex >= 0; pIndex--) {
-        let p = powerUps[pIndex];
-        p.y += 2;
-        p.el.style.top = p.y + 'px';
-
-        if (checkCollision(playerShip, p.x, p.y, 32, 32)) {
-            playSound('powerup');
-            if (p.type === 'shield') {
-                hasShield = true;
-                updateShieldUI();
-            } else if (p.type === 'double') {
-                doubleShotTime = 15000; // 15 שניות
-            }
-            p.el.remove();
-            powerUps.splice(pIndex, 1);
-        } else if (p.y > viewport.offsetHeight) {
-            p.el.remove();
-            powerUps.splice(pIndex, 1);
-        }
-    }
-
-    gameLoopId = requestAnimationFrame(gameLoop);
-}
-
-function checkCollision(ship, objX, objY, objW, objH) {
-    const sRect = ship.getBoundingClientRect();
-    const vRect = viewport.getBoundingClientRect();
-    const sX = sRect.left - vRect.left;
-    const sY = sRect.top - vRect.top;
-
-    return (
-        sX < objX + objW &&
-        sX + sRect.width > objX &&
-        sY < objY + objH &&
-        sY + sRect.height > objY
-    );
-}
-
-function handlePlayerHit() {
-    playSound('explosion');
-    triggerScreenShake();
-    if (hasShield) {
-        hasShield = false;
-        updateShieldUI();
-        createExplosion(shipX * viewport.offsetWidth / 100, viewport.offsetHeight - 60, ['#00d2ff']);
-    } else {
-        gameOver();
-    }
-}
-
-function triggerScreenShake() {
-    container.classList.add('shake');
-    setTimeout(() => container.classList.remove('shake'), 150);
-}
-
-function createExplosion(x, y, colors) {
-    for (let i = 0; i < 16; i++) {
-        const p = document.createElement('div');
-        p.classList.add('particle');
-        p.style.left = x + 'px';
-        p.style.top = y + 'px';
-        p.style.color = colors[Math.floor(Math.random() * colors.length)];
-        p.style.backgroundColor = 'currentColor';
+function drawAsteroids() {
+    asteroids.forEach(ast => {
+        ctx.save();
+        ctx.translate(ast.x, ast.y);
         
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.random() * 50 + 10;
-        p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
-        p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+        // גוף אסטרואיד
+        ctx.beginPath();
+        ctx.arc(0, 0, ast.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#555";
+        ctx.fill();
 
-        viewport.appendChild(p);
-        setTimeout(() => p.remove(), 500);
+        // מכתשי פגיעה (Craters)
+        const craters = [
+            { x: -ast.radius * 0.3, y: -ast.radius * 0.2, r: ast.radius * 0.2 },
+            { x: ast.radius * 0.2, y: ast.radius * 0.3, r: ast.radius * 0.25 }
+        ];
+        craters.forEach(c => {
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+            ctx.fillStyle = "#333";
+            ctx.fill();
+        });
+
+        ctx.restore();
+        ast.y += ast.speed;
+    });
+}
+
+// חלליות תמיכה בחיים נמוכים
+function checkBackupSupport() {
+    if (player.health < 30 && !player.backupSummoned) {
+        player.backupSummoned = true;
+        backupShips.push({ x: player.x - 60, y: player.y + 20 });
+        backupShips.push({ x: player.x + 60, y: player.y + 20 });
     }
 }
 
-function gameOver() {
-    isGameOver = true;
-    playSound('gameover');
-    
-    clearInterval(spawnTimer);
-    clearInterval(enemyTimer);
-    clearInterval(powerUpTimer);
-    clearInterval(shootTimer);
+// צפייה בפרסומת והחייאה (Revive)
+function watchAdAndRevive() {
+    alert("פרסומת מופעלת... (החזרה לחיים)");
+    player.health = 100;
+    document.getElementById("revive-screen").classList.add("hidden");
+    isGameRunning = true;
+    gameLoop();
+}
 
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('space_high_score', highScore);
-        highScoreElement.innerText = highScore;
+function triggerReviveScreen() {
+    isGameRunning = false;
+    document.getElementById("revive-screen").classList.remove("hidden");
+}
+
+// ==========================================
+// 5. לולאת המשחק הראשי (Game Loop)
+// ==========================================
+function gameLoop() {
+    if (!isGameRunning) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // ציור שחקן ומד חיים משולש
+    ctx.fillStyle = settings.defaultShip === "red" ? "#ff0033" : "#00f0ff";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    drawTriangleHealthBar(player.x, player.y, player.width, 15, player.health, player.maxHealth);
+
+    // בדיקת חלליות עזר
+    checkBackupSupport();
+    backupShips.forEach(b => {
+        ctx.fillStyle = "#00ff66";
+        ctx.fillRect(b.x, b.y, 20, 20);
+    });
+
+    // ייצור וציור אסטרואידים
+    spawnAsteroid();
+    drawAsteroids();
+
+    // ציור קליעים
+    bullets.forEach((b, index) => {
+        ctx.fillStyle = b.type === "RED_LIGHTNING" ? "#ff0033" : (b.type === "YELLOW_ORB" ? "#ffff00" : "#00f0ff");
+        ctx.fillRect(b.x, b.y, 6, 12);
+        b.y -= b.speed;
+        if (b.y < 0) bullets.splice(index, 1);
+    });
+
+    // בדיקת פסיקת חיים (הדגמה למסך Revive)
+    if (player.health <= 0) {
+        triggerReviveScreen();
+        return;
     }
 
-    finalScoreElement.innerText = score;
-    gameOverOverlay.classList.remove('hidden');
+    requestAnimationFrame(gameLoop);
 }
