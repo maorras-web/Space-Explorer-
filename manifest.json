@@ -1,0 +1,17 @@
+{
+  "name": "Space Explorer",
+  "short_name": "SpaceExplorer",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/pointhi/kml-icon-portal/master/icons/red-square.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
