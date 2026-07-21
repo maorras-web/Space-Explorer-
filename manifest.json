@@ -1,6 +1,7 @@
 {
   "name": "Space Explorer",
   "short_name": "SpaceExplorer",
+  "description": "An exciting 2D space shooter game!",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",
@@ -8,7 +9,7 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/pointhi/kml-icon-portal/master/icons/red-square.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/1083/1083462.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
